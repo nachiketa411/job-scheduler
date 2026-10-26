@@ -13,6 +13,7 @@ import software.amazon.smithy.java.core.serde.document.Document;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -92,12 +93,16 @@ public class JobRepositoryImpl implements IJobRepository {
     }
 
     private Job toJob(Row row) {
-        UUID jobId = row.getUuid("job_id");
-        UUID taskId = row.getUuid("task_id");
+        UUID jobId = Objects.requireNonNull(
+                row.getUuid("job_id"),
+                "job_id cannot be null"
+        );
+        UUID taskId = Objects.requireNonNull(
+                row.getUuid("task_id"),
+                "task_id cannot be null"
+        );
         String jobName = row.getString("name");
-        Instant created_at = row.getInstant("created_at");
-        assert jobId != null;
-        assert taskId != null;
+        Instant createdAt = row.getInstant("created_at");
 
         Map<String, String> storedParameters =
                 row.getMap(
@@ -123,13 +128,15 @@ public class JobRepositoryImpl implements IJobRepository {
                         parameterSchema
                 );
 
-        String schedule_type = row.getString("schedule_type");
-        String schedule_expression = row.getString("schedule_expression");
-        assert schedule_type != null;
+        String scheduleType = Objects.requireNonNull(
+                row.getString("schedule_type"),
+                "schedule_type cannot be null"
+        );
+        String scheduleExpression = row.getString("schedule_expression");
 
         Schedule schedule = Schedule.builder()
-                .type(ScheduleType.from(schedule_type))
-                .expression(schedule_expression)
+                .type(ScheduleType.from(scheduleType))
+                .expression(scheduleExpression)
                 .build();
 
         return Job.builder()
@@ -138,7 +145,7 @@ public class JobRepositoryImpl implements IJobRepository {
                 .taskId(taskId.toString())
                 .parameters(parameters)
                 .schedule(schedule)
-                .createdAt(created_at)
+                .createdAt(createdAt)
                 .build();
     }
 }
