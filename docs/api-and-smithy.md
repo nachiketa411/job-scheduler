@@ -270,46 +270,172 @@ A cancellation operation may be added later without changing this principle beca
 
 ## 10. Spring + Generated Smithy Model Serialization
 
-Generated Smithy types are immutable builder-based models and do not necessarily look like normal JavaBeans with zero-argument constructors.
+Generated Smithy Java types are immutable, builder-based models that implement `SerializableStruct`. They are not conventional JavaBeans and do not expose the zero-argument constructors that Spring/Jackson normally expects for request deserialization.
 
-Direct Spring/Jackson request conversion therefore caused `HttpMessageConversionException` during development.
+Rather than introducing duplicate handwritten DTOs or a custom controller argument resolver for request bodies, the project integrates Smithy serialization directly into Spring MVC through a custom `HttpMessageConverter`.
 
-The project solved this boundary with a custom Spring MVC argument resolver for Smithy inputs.
+### 10.1 `SmithyJsonHttpMessageConverter`
 
-Conceptually:
+The project uses a custom Spring `HttpMessageConverter` as the bridge between Spring MVC and the generated Smithy Java types.
 
-```java
-public final class SmithyArgumentResolver
-        implements HandlerMethodArgumentResolver {
+Its responsibilities are intentionally narrow:
 
-    @Override
-    public boolean supportsParameter(MethodParameter parameter) {
-        // Detect supported generated Smithy input types.
-    }
+- handle only types that implement `SerializableStruct`;
+- deserialize incoming JSON with Smithy `JsonCodec`;
+- create the generated target type through its Smithy builder;
+- serialize generated Smithy response objects back to JSON;
+- translate conversion failures into application/Spring exceptions;
+- cache builder **factories** so reflective discovery is not repeated for every request.
 
-    @Override
-    public Object resolveArgument(...) {
-        // Read request body and construct the immutable Smithy model.
-    }
-}
+The converter does **not** cache builders themselves. A new builder is created for each request because Smithy builders are mutable.
+
+At a high level:
+
+```text
+Incoming JSON
+    │
+    ▼
+Spring MVC
+    │
+    ▼
+SmithyJsonHttpMessageConverter
+    │
+    ├── find/create builder factory
+    ├── create fresh ShapeBuilder
+    └── JsonCodec.deserializeShape(...)
+    │
+    ▼
+Generated SerializableStruct
 ```
 
-The resolver is registered through Spring MVC configuration:
+For responses, the same converter performs the reverse operation using `JsonCodec.serialize(...)`.
+
+This keeps serialization logic centralized in one Spring integration component instead of duplicating conversion logic inside every controller.
+
+### 10.2 How deserialization works
+
+For an incoming `application/json` request whose target type implements `SerializableStruct`, Spring selects this converter. The converter then:
+
+1. Reads the raw request body as bytes.
+2. Obtains a new Smithy `ShapeBuilder` for the generated target type.
+3. Uses `JsonCodec.deserializeShape(...)` to populate that builder from JSON.
+4. Returns the generated immutable Smithy object to the controller.
+
+Generated Smithy classes expose a static `builder()` method, but the converter only knows the target class at runtime. It therefore discovers `builder()` through reflection.
+
+The expensive reflective lookup is not repeated for every request. A `ConcurrentHashMap` caches a `Supplier` for each Smithy class:
+
+```text
+Generated Smithy class
+        │
+        ▼
+ConcurrentHashMap<Class, Supplier<ShapeBuilder>>
+        │
+        ▼
+new builder per request
+```
+
+This is important because a builder is mutable and must not be reused across requests, while the factory that creates builders is safe to cache.
+
+### 10.3 How serialization works
+
+Controller return values that implement `SerializableStruct` are handled by the same converter.
+
+The converter calls:
 
 ```java
+ByteBuffer json = jsonCodec.serialize(value);
+```
+
+and writes the resulting bytes directly to the HTTP response body.
+
+This means Smithy's own JSON codec is responsible for both directions of the HTTP boundary:
+
+```text
+HTTP JSON
+   │
+   ▼
+SmithyJsonHttpMessageConverter
+   │
+   ▼
+JsonCodec
+   │
+   ▼
+Generated SerializableStruct
+```
+
+and, for responses, the same path operates in reverse.
+
+### 10.4 Spring MVC registration
+
+The converter is registered globally through `WebMvcConfigurer`:
+
+```java
+package com.nachiketa.scheduler.api.config;
+
+import com.nachiketa.scheduler.api.converter.SmithyJsonHttpMessageConverter;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.HttpMessageConverters;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
+
     @Override
-    public void addArgumentResolvers(
-            List<HandlerMethodArgumentResolver> resolvers) {
-        resolvers.add(smithyArgumentResolver);
+    public void configureMessageConverters(
+            HttpMessageConverters.ServerBuilder builder
+    ) {
+        builder.addCustomConverter(
+                new SmithyJsonHttpMessageConverter()
+        );
     }
 }
 ```
 
-Jackson/Smithy document support is also registered where required for `Document` values.
+Once registered, controllers can accept and return generated Smithy structures directly without maintaining a second set of request/response DTOs.
 
-This keeps controllers typed with Smithy inputs without introducing duplicate handwritten request DTOs.
+For example:
+
+```java
+@PostMapping("/jobs")
+public CreateJobOutput createJob(@RequestBody CreateJobInput input) {
+    return jobService.createJob(input);
+}
+```
+
+The application therefore keeps a single API model:
+
+```text
+Smithy model
+    │
+    ▼
+Generated Java type
+    │
+    ├── Spring controller input
+    ├── Spring controller output
+    └── service-layer API contract
+```
+
+### 10.5 Error handling
+
+Conversion failures are translated at the HTTP boundary.
+
+- Errors creating a generated Smithy builder are wrapped in `SmithyConverterException`.
+- Errors serializing a Smithy response are wrapped in `SmithyConverterException`.
+- Other runtime failures while reading request JSON are translated to Spring's `HttpMessageNotReadableException`, allowing malformed request bodies to be treated as HTTP request-conversion failures.
+
+### 10.6 Why this approach
+
+This design was chosen because it:
+
+- uses Smithy's native serialization semantics instead of teaching Jackson how to instantiate generated immutable types;
+- avoids duplicate API DTOs;
+- keeps controller signatures strongly typed with generated Smithy classes;
+- applies consistently to every generated `SerializableStruct`;
+- supports both request deserialization and response serialization in one integration point;
+- caches reflection metadata while still creating a fresh mutable builder for every request.
+
+The custom converter is therefore the integration boundary between Spring MVC's HTTP message-conversion pipeline and the generated Smithy Java model.
 
 ---
 
