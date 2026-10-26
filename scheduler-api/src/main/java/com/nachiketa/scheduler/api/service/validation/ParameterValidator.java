@@ -6,6 +6,14 @@ import software.amazon.smithy.java.core.serde.document.Document;
 
 import java.util.Map;
 
+import static com.nachiketa.scheduler.model.ParameterType.BOOLEAN;
+import static com.nachiketa.scheduler.model.ParameterType.DOUBLE;
+import static com.nachiketa.scheduler.model.ParameterType.FLOAT;
+import static com.nachiketa.scheduler.model.ParameterType.INTEGER;
+import static com.nachiketa.scheduler.model.ParameterType.LONG;
+import static com.nachiketa.scheduler.model.ParameterType.STRING;
+import static com.nachiketa.scheduler.model.ParameterType.TIMESTAMP;
+
 @Component
 public class ParameterValidator {
 
@@ -46,47 +54,63 @@ public class ParameterValidator {
             Document value,
             ParameterType expectedType) {
 
-        try {
-            if (expectedType == ParameterType.STRING) {
-                value.asString();
-                return;
-            }
-
-            if (expectedType == ParameterType.INTEGER) {
-                value.asInteger();
-                return;
-            }
-
-            if (expectedType == ParameterType.LONG) {
-                value.asLong();
-                return;
-            }
-
-            if (expectedType == ParameterType.BOOLEAN) {
-                value.asBoolean();
-                return;
-            }
-
-            if (expectedType == ParameterType.FLOAT) {
-                value.asFloat();
-                return;
-            }
-
-            if (expectedType == ParameterType.DOUBLE) {
-                value.asDouble();
-                return;
-            }
-
-            if (expectedType == ParameterType.TIMESTAMP) {
-                value.asTimestamp();
-                return;
-            }
-
-            throw new IllegalArgumentException(
-                    "Unsupported parameter type: "
-                            + expectedType.getValue()
+        switch (expectedType.getValue()) {
+            case "STRING" -> validateConversion(
+                    name,
+                    expectedType,
+                    value::asString
             );
 
+            case "INTEGER" -> validateConversion(
+                    name,
+                    expectedType,
+                    value::asInteger
+            );
+
+            case "LONG" -> validateConversion(
+                    name,
+                    expectedType,
+                    value::asLong
+            );
+
+            case "BOOLEAN" -> validateConversion(
+                    name,
+                    expectedType,
+                    value::asBoolean
+            );
+
+            case "FLOAT" -> validateConversion(
+                    name,
+                    expectedType,
+                    value::asFloat
+            );
+
+            case "DOUBLE" -> validateConversion(
+                    name,
+                    expectedType,
+                    value::asDouble
+            );
+
+            case "TIMESTAMP" -> validateConversion(
+                    name,
+                    expectedType,
+                    value::asTimestamp
+            );
+
+            default -> throw new IllegalArgumentException(
+                    "Unsupported parameter type: " + expectedType.getValue()
+            );
+        }
+    }
+
+
+    private void validateConversion(
+            String name,
+            ParameterType expectedType,
+            Runnable conversion) {
+
+        try {
+            conversion.run();
         } catch (RuntimeException exception) {
             throw new IllegalArgumentException(
                     "Parameter '%s' must be of type %s"
