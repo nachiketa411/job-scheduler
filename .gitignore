@@ -1,14 +1,28 @@
 # IntelliJ
 .idea/
 **/.idea/
+*.iws
 *.iml/
+*.ipr
 out/
+**/out/
 
 # Gradle
 .gradle/
 **/.gradle/
 build/
 **/build/
+
+# STS / Eclipse
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+bin/
+**/bin/
 
 # Java
 *.class
@@ -23,3 +37,13 @@ Thumbs.db
 # Environment / Secrets
 .env
 .env.*
+
+# NetBeans
+nbproject/private/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# VS Code
+.vscode/
