@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: scheduler-api
+
+  cassandra:
+    keyspace-name: scheduler
+    contact-points: localhost:9042
+    local-datacenter: datacenter1
