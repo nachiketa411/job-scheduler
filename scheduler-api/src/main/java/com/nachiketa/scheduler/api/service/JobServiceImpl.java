@@ -3,7 +3,6 @@ package com.nachiketa.scheduler.api.service;
 import com.nachiketa.scheduler.api.repository.IJobExecutionRepository;
 import com.nachiketa.scheduler.api.repository.IJobRepository;
 import com.nachiketa.scheduler.api.repository.ITaskRepository;
-import com.nachiketa.scheduler.api.repository.InMemoryJobRepository;
 import com.nachiketa.scheduler.api.service.schedule.NextExecutionCalculator;
 import com.nachiketa.scheduler.api.service.validation.ParameterValidator;
 import com.nachiketa.scheduler.api.service.validation.ScheduleValidator;
@@ -25,7 +24,6 @@ import java.util.UUID;
 @Service
 public class JobServiceImpl implements IJobService {
 
-    private final InMemoryJobRepository repository;
     private final ITaskRepository taskRepository;
     private final IJobRepository jobRepository;
     private final IJobExecutionRepository jobExecutionRepository;
@@ -35,7 +33,6 @@ public class JobServiceImpl implements IJobService {
     private final NextExecutionCalculator nextExecutionCalculator;
 
     public JobServiceImpl(
-            InMemoryJobRepository repository,
             ITaskRepository taskRepository,
             IJobRepository jobRepository,
             IJobExecutionRepository jobExecutionRepository,
@@ -43,7 +40,6 @@ public class JobServiceImpl implements IJobService {
             ScheduleValidator scheduleValidator,
             NextExecutionCalculator nextExecutionCalculator
     ) {
-        this.repository = repository;
         this.taskRepository = taskRepository;
         this.jobRepository = jobRepository;
         this.jobExecutionRepository = jobExecutionRepository;
@@ -87,7 +83,9 @@ public class JobServiceImpl implements IJobService {
     }
 
     public GetJobOutput getJob(GetJobInput input) {
-        Job job = repository.findById(input.getJobId())
+        Job job = jobRepository.findById(
+                    UUID.fromString(input.getJobId())
+                )
                 .orElseThrow(() ->
                         JobNotFoundException.builder()
                                 .message("Job not found: " + input.getJobId())
