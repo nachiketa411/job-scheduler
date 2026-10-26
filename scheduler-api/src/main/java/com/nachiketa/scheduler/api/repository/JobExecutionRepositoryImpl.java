@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -131,11 +132,15 @@ public class JobExecutionRepositoryImpl implements IJobExecutionRepository {
     }
 
     private JobExecution toJobExecution(Row row) {
-        UUID jobId = row.getUuid("job_id");
-        String executionStatus = row.getString("status");
+        UUID jobId = Objects.requireNonNull(
+                row.getUuid("job_id"),
+                "job_id cannot be null"
+        );
 
-        assert jobId != null;
-        assert executionStatus != null;
+        String executionStatus = Objects.requireNonNull(
+                row.getString("status"),
+                "status cannot be null"
+        );
 
 
 
