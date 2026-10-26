@@ -41,6 +41,36 @@ dependencies {
 
 }
 
+val integrationTest by sourceSets.creating {
+	java.srcDir("src/integrationTest/java")
+	resources.srcDir("src/integrationTest/resources")
+
+	compileClasspath += sourceSets.main.get().output +
+			configurations.testRuntimeClasspath.get()
+
+	runtimeClasspath += output + compileClasspath
+}
+
+configurations[integrationTest.implementationConfigurationName].extendsFrom(
+	configurations.testImplementation.get()
+)
+
+configurations[integrationTest.runtimeOnlyConfigurationName].extendsFrom(
+	configurations.testRuntimeOnly.get()
+)
+
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+tasks.register<Test>("integrationTest") {
+	description = "Runs integration tests."
+	group = "verification"
+
+	testClassesDirs = integrationTest.output.classesDirs
+	classpath = integrationTest.runtimeClasspath
+
+	useJUnitPlatform()
+
+	shouldRunAfter(tasks.test)
 }
