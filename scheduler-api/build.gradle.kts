@@ -32,6 +32,13 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
+	testImplementation(
+		platform("org.testcontainers:testcontainers-bom:2.0.5")
+	)
+
+	testImplementation("org.testcontainers:testcontainers-cassandra")
+	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+
 }
 
 tasks.withType<Test> {
