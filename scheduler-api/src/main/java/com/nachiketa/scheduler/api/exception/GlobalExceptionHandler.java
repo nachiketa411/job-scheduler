@@ -1,5 +1,6 @@
 package com.nachiketa.scheduler.api.exception;
 
+import com.nachiketa.scheduler.model.JobNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,5 +22,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(response);
+    }
+
+    @ExceptionHandler(JobNotFoundException.class)
+    public  ResponseEntity<JobNotFoundException> handleJobNotFound(
+            JobNotFoundException exception
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(exception);
     }
 }
