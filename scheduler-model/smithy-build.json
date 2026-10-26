@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "plugins": {
+    "java-codegen": {
+      "service": "com.nachiketa.scheduler#SchedulerService",
+      "namespace": "com.nachiketa.scheduler",
+      "modes": ["types"]
+    }
+  }
+}
