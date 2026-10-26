@@ -1,9 +1,11 @@
 package com.nachiketa.scheduler.api.repository.integration;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.nachiketa.scheduler.api.mapper.ParameterDocumentMapper;
 import com.nachiketa.scheduler.api.repository.ITaskRepository;
 import com.nachiketa.scheduler.api.repository.JobRepositoryImpl;
+import com.nachiketa.scheduler.api.repository.TaskRepositoryImpl;
 import com.nachiketa.scheduler.model.Job;
 import com.nachiketa.scheduler.model.ParameterType;
 import com.nachiketa.scheduler.model.Schedule;
@@ -66,8 +68,15 @@ public class JobRepositoryIntegrationTest {
                 "TRUNCATE scheduler.jobs"
         );
 
-        taskRepository = mock(ITaskRepository.class);
-        parameterMapper = mock(ParameterDocumentMapper.class);
+        session.execute(
+                "TRUNCATE scheduler.tasks"
+        );
+
+        TaskRepositoryImpl taskRepository =
+                new TaskRepositoryImpl(session);
+
+        ParameterDocumentMapper parameterMapper =
+                new ParameterDocumentMapper();
 
         repository = new JobRepositoryImpl(
                 session,
@@ -92,50 +101,40 @@ public class JobRepositoryIntegrationTest {
         UUID jobId = UUID.randomUUID();
         UUID taskId = UUID.randomUUID();
 
+        insertTask(taskId);
+
         Instant createdAt =
                 Instant.parse("2026-10-26T18:00:00Z");
 
-        Document inputParameters =
-                mock(Document.class);
+        Document parameters =
+                Document.of(
+                        Map.of(
+                                "recipient",
+                                Document.of("user@example.com"),
 
-        Document reconstructedParameters =
-                mock(Document.class);
+                                "retryCount",
+                                Document.of(3),
 
-        Map<String, String> storedParameters = Map.of(
-                "recipient", "user@example.com",
-                "retryCount", "3"
-        );
-
-        @SuppressWarnings("unchecked")
-        Map<String, ParameterType> parameterSchema =
-                mock(Map.class);
-
-        when(parameterMapper.toStorage(inputParameters))
-                .thenReturn(storedParameters);
-
-        when(taskRepository.findParameterSchema(taskId))
-                .thenReturn(
-                        Optional.of(parameterSchema)
+                                "enabled",
+                                Document.of(true)
+                        )
                 );
 
-        when(parameterMapper.fromStorage(
-                storedParameters,
-                parameterSchema
-        )).thenReturn(reconstructedParameters);
+        Schedule schedule =
+                Schedule.builder()
+                        .type(ScheduleType.CRON)
+                        .expression("30 15 * * 5")
+                        .build();
 
-        Schedule schedule = Schedule.builder()
-                .type(ScheduleType.CRON)
-                .expression("30 15 * * 5")
-                .build();
-
-        Job job = Job.builder()
-                .jobId(jobId.toString())
-                .name("weekly-email")
-                .taskId(taskId.toString())
-                .parameters(inputParameters)
-                .schedule(schedule)
-                .createdAt(createdAt)
-                .build();
+        Job job =
+                Job.builder()
+                        .jobId(jobId.toString())
+                        .name("weekly-email")
+                        .taskId(taskId.toString())
+                        .parameters(parameters)
+                        .schedule(schedule)
+                        .createdAt(createdAt)
+                        .build();
 
         repository.save(job);
 
@@ -144,7 +143,8 @@ public class JobRepositoryIntegrationTest {
 
         assertTrue(result.isPresent());
 
-        Job savedJob = result.get();
+        Job savedJob =
+                result.get();
 
         assertEquals(
                 jobId.toString(),
@@ -159,11 +159,6 @@ public class JobRepositoryIntegrationTest {
         assertEquals(
                 taskId.toString(),
                 savedJob.getTaskId()
-        );
-
-        assertSame(
-                reconstructedParameters,
-                savedJob.getParameters()
         );
 
         assertEquals(
@@ -181,23 +176,31 @@ public class JobRepositoryIntegrationTest {
                 savedJob.getCreatedAt()
         );
 
-        verify(parameterMapper)
-                .toStorage(inputParameters);
+        Map<String, Document> savedParameters =
+                savedJob.getParameters()
+                        .asStringMap();
 
-        verify(taskRepository)
-                .findParameterSchema(taskId);
+        assertEquals(
+                "user@example.com",
+                savedParameters
+                        .get("recipient")
+                        .asString()
+        );
 
-        verify(parameterMapper)
-                .fromStorage(
-                        storedParameters,
-                        parameterSchema
-                );
+        assertEquals(
+                3,
+                savedParameters
+                        .get("retryCount")
+                        .asInteger()
+        );
+
+        assertTrue(
+                savedParameters
+                        .get("enabled")
+                        .asBoolean()
+        );
     }
 
-    /**
-     * Verifies that querying real Cassandra for a job that
-     * does not exist returns an empty Optional.
-     */
     @Test
     void findById_whenJobDoesNotExist_returnsEmpty() {
         UUID jobId = UUID.randomUUID();
@@ -206,5 +209,30 @@ public class JobRepositoryIntegrationTest {
                 repository.findById(jobId);
 
         assertTrue(result.isEmpty());
+    }
+
+    private static void insertTask(UUID taskId) {
+        Map<String, String> parameterSchema =
+                Map.of(
+                        "recipient", "STRING",
+                        "retryCount", "INTEGER",
+                        "enabled", "BOOLEAN"
+                );
+
+        session.execute(
+                SimpleStatement.newInstance(
+                        """
+                        INSERT INTO tasks (
+                            task_id,
+                            name,
+                            parameter_schema
+                        )
+                        VALUES (?, ?, ?)
+                        """,
+                        taskId,
+                        "send-email",
+                        parameterSchema
+                )
+        );
     }
 }
