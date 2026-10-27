@@ -1,6 +1,6 @@
 package com.nachiketa.scheduler.api.service;
 
-import com.nachiketa.scheduler.api.repository.IJobExecutionRepository;
+import com.nachiketa.scheduler.api.exception.InvalidRequestException;
 import com.nachiketa.scheduler.api.repository.IJobRepository;
 import com.nachiketa.scheduler.api.repository.ITaskRepository;
 import com.nachiketa.scheduler.api.service.schedule.NextExecutionCalculator;
@@ -26,7 +26,6 @@ public class JobServiceImpl implements IJobService {
 
     private final ITaskRepository taskRepository;
     private final IJobRepository jobRepository;
-    private final IJobExecutionRepository jobExecutionRepository;
 
     private final ParameterValidator parameterValidator;
     private final ScheduleValidator scheduleValidator;
@@ -35,28 +34,24 @@ public class JobServiceImpl implements IJobService {
     public JobServiceImpl(
             ITaskRepository taskRepository,
             IJobRepository jobRepository,
-            IJobExecutionRepository jobExecutionRepository,
             ParameterValidator parameterValidator,
             ScheduleValidator scheduleValidator,
             NextExecutionCalculator nextExecutionCalculator
     ) {
         this.taskRepository = taskRepository;
         this.jobRepository = jobRepository;
-        this.jobExecutionRepository = jobExecutionRepository;
         this.parameterValidator = parameterValidator;
         this.scheduleValidator = scheduleValidator;
         this.nextExecutionCalculator = nextExecutionCalculator;
     }
 
     public CreateJobOutput createJob(CreateJobInput input) {
-        UUID taskId = UUID.fromString(
-                input.getTaskId()
-        );
+        UUID taskId = parseUuid(input.getTaskId(), "taskId");
 
         Map<String, ParameterType> parameterSchema =
                 taskRepository.findParameterSchema(taskId)
                         .orElseThrow(() ->
-                                new IllegalArgumentException(
+                                new InvalidRequestException(
                                         "Task does not exist: "
                                                 + taskId
                                 )
@@ -72,10 +67,8 @@ public class JobServiceImpl implements IJobService {
         );
 
         Job job = buildJob(input);
-        jobRepository.save(job);
-
         JobExecution firstExecution = buildFirstExecution(job);
-        jobExecutionRepository.save(firstExecution);
+        jobRepository.saveWithFirstExecution(job, firstExecution);
 
         return CreateJobOutput.builder()
                 .job(job)
@@ -84,7 +77,7 @@ public class JobServiceImpl implements IJobService {
 
     public GetJobOutput getJob(GetJobInput input) {
         Job job = jobRepository.findById(
-                    UUID.fromString(input.getJobId())
+                    parseUuid(input.getJobId(), "jobId")
                 )
                 .orElseThrow(() ->
                         JobNotFoundException.builder()
@@ -120,5 +113,16 @@ public class JobServiceImpl implements IJobService {
                 .status(ExecutionStatus.PENDING)
                 .attempt(0)
                 .build();
+    }
+
+    private UUID parseUuid(String value, String field) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw new InvalidRequestException(
+                    field + " must be a valid UUID: " + value,
+                    exception
+            );
+        }
     }
 }

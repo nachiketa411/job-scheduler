@@ -1,11 +1,15 @@
 package com.nachiketa.scheduler.api.repository;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.BatchStatement;
+import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.nachiketa.scheduler.api.mapper.ParameterDocumentMapper;
+import com.nachiketa.scheduler.model.ExecutionStatus;
 import com.nachiketa.scheduler.model.Job;
+import com.nachiketa.scheduler.model.JobExecution;
 import com.nachiketa.scheduler.model.ParameterType;
 import com.nachiketa.scheduler.model.Schedule;
 import com.nachiketa.scheduler.model.ScheduleType;
@@ -431,6 +435,54 @@ public class JobRepositoryImplTest {
         assertEquals(
                 "Task does not exist: " + taskId,
                 exception.getMessage()
+        );
+    }
+
+    /**
+     * Verifies that a job and its first execution are written
+     * in a single LOGGED batch so neither can persist without the other.
+     */
+    @Test
+    void saveWithFirstExecution_executesSingleLoggedBatch() {
+        UUID jobId = UUID.randomUUID();
+        UUID taskId = UUID.randomUUID();
+
+        Document parameters = mock(Document.class);
+
+        when(parameterMapper.toStorage(parameters))
+                .thenReturn(Map.of());
+
+        Job job = createJob(
+                jobId,
+                taskId,
+                parameters
+        );
+
+        JobExecution execution = JobExecution.builder()
+                .jobId(jobId.toString())
+                .executionTime(Instant.parse("2026-10-30T15:30:00Z"))
+                .status(ExecutionStatus.PENDING)
+                .attempt(0)
+                .build();
+
+        jobRepository.saveWithFirstExecution(job, execution);
+
+        ArgumentCaptor<BatchStatement> batchCaptor =
+                ArgumentCaptor.forClass(BatchStatement.class);
+
+        verify(session)
+                .execute(batchCaptor.capture());
+
+        BatchStatement batch = batchCaptor.getValue();
+
+        assertEquals(
+                BatchType.LOGGED,
+                batch.getBatchType()
+        );
+
+        assertEquals(
+                2,
+                batch.size()
         );
     }
 }

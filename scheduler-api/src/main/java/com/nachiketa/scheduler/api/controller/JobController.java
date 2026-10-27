@@ -5,6 +5,8 @@ import com.nachiketa.scheduler.model.CreateJobInput;
 import com.nachiketa.scheduler.model.CreateJobOutput;
 import com.nachiketa.scheduler.model.GetJobInput;
 import com.nachiketa.scheduler.model.GetJobOutput;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/jobs")
 public class JobController {
+    private static final Logger log = LoggerFactory.getLogger(JobController.class);
 
     private final IJobService jobService;
 
@@ -33,7 +36,7 @@ public class JobController {
     public ResponseEntity<CreateJobOutput> createJob(
             @RequestBody CreateJobInput input
     ) {
-        System.out.println("CREATING JOB");
+        log.info("Creating job '{}' for task {}", input.getName(), input.getTaskId());
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(jobService.createJob(input));
@@ -46,7 +49,8 @@ public class JobController {
         GetJobInput input = GetJobInput.builder()
                 .jobId(jobId)
                 .build();
-        System.out.println("GETTING A JOB");
+
+        log.debug("Fetching job {}", jobId);
         return ResponseEntity.ok(
                 jobService.getJob(input)
         );

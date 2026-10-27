@@ -29,34 +29,7 @@ public class JobExecutionRepositoryImpl implements IJobExecutionRepository {
 
     @Override
     public void save(JobExecution execution) {
-        Instant executionTime = execution.getExecutionTime();
-        Instant timeBucket = calculateTimeBucket(executionTime);
-
-        session.execute(
-                SimpleStatement.newInstance(
-                        """
-                                INSERT INTO job_executions (
-                                    time_bucket,
-                                    execution_time,
-                                    job_id,
-                                    status,
-                                    attempt,
-                                    started_at,
-                                    completed_at,
-                                    error
-                                )
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                                """,
-                        timeBucket,
-                        executionTime,
-                        UUID.fromString(execution.getJobId()),
-                        execution.getStatus().getValue(),
-                        execution.getAttempt(),
-                        execution.getStartedAt(),
-                        execution.getCompletedAt(),
-                        execution.getError()
-                )
-        );
+        session.execute(insertStatement(execution));
     }
 
     @Override
@@ -171,7 +144,36 @@ public class JobExecutionRepositoryImpl implements IJobExecutionRepository {
                 .build();
     }
 
-    private Instant calculateTimeBucket(
+    static SimpleStatement insertStatement(JobExecution execution) {
+        Instant executionTime = execution.getExecutionTime();
+        Instant timeBucket = calculateTimeBucket(executionTime);
+
+        return SimpleStatement.newInstance(
+                """
+                        INSERT INTO job_executions (
+                            time_bucket,
+                            execution_time,
+                            job_id,
+                            status,
+                            attempt,
+                            started_at,
+                            completed_at,
+                            error
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                timeBucket,
+                executionTime,
+                UUID.fromString(execution.getJobId()),
+                execution.getStatus().getValue(),
+                execution.getAttempt(),
+                execution.getStartedAt(),
+                execution.getCompletedAt(),
+                execution.getError()
+        );
+    }
+
+    private static Instant calculateTimeBucket(
             Instant executionTime) {
 
         long epochSeconds =

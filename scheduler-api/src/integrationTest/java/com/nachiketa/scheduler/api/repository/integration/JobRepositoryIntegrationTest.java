@@ -4,9 +4,12 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.nachiketa.scheduler.api.mapper.ParameterDocumentMapper;
 import com.nachiketa.scheduler.api.repository.ITaskRepository;
+import com.nachiketa.scheduler.api.repository.JobExecutionRepositoryImpl;
 import com.nachiketa.scheduler.api.repository.JobRepositoryImpl;
 import com.nachiketa.scheduler.api.repository.TaskRepositoryImpl;
+import com.nachiketa.scheduler.model.ExecutionStatus;
 import com.nachiketa.scheduler.model.Job;
+import com.nachiketa.scheduler.model.JobExecution;
 import com.nachiketa.scheduler.model.ParameterType;
 import com.nachiketa.scheduler.model.Schedule;
 import com.nachiketa.scheduler.model.ScheduleType;
@@ -70,6 +73,10 @@ public class JobRepositoryIntegrationTest {
 
         session.execute(
                 "TRUNCATE scheduler.tasks"
+        );
+
+        session.execute(
+                "TRUNCATE scheduler.job_executions"
         );
 
         TaskRepositoryImpl taskRepository =
@@ -209,6 +216,68 @@ public class JobRepositoryIntegrationTest {
                 repository.findById(jobId);
 
         assertTrue(result.isEmpty());
+    }
+
+    /**
+     * Verifies that saveWithFirstExecution persists both the job
+     * and its first execution to real Cassandra.
+     */
+    @Test
+    void saveWithFirstExecution_persistsJobAndExecution() {
+        UUID jobId = UUID.randomUUID();
+        UUID taskId = UUID.randomUUID();
+
+        insertTask(taskId);
+
+        Job job =
+                Job.builder()
+                        .jobId(jobId.toString())
+                        .name("weekly-email")
+                        .taskId(taskId.toString())
+                        .parameters(
+                                Document.of(
+                                        Map.of(
+                                                "recipient", Document.of("user@example.com"),
+                                                "retryCount", Document.of(3),
+                                                "enabled", Document.of(true)
+                                        )
+                                )
+                        )
+                        .schedule(
+                                Schedule.builder()
+                                        .type(ScheduleType.CRON)
+                                        .expression("30 15 * * 5")
+                                        .build()
+                        )
+                        .createdAt(Instant.parse("2026-10-26T18:00:00Z"))
+                        .build();
+
+        Instant executionTime =
+                Instant.parse("2026-10-30T15:30:00Z");
+
+        JobExecution execution =
+                JobExecution.builder()
+                        .jobId(jobId.toString())
+                        .executionTime(executionTime)
+                        .status(ExecutionStatus.PENDING)
+                        .attempt(0)
+                        .build();
+
+        repository.saveWithFirstExecution(job, execution);
+
+        assertTrue(
+                repository.findById(jobId).isPresent()
+        );
+
+        Optional<JobExecution> savedExecution =
+                new JobExecutionRepositoryImpl(session)
+                        .find(jobId, executionTime);
+
+        assertTrue(savedExecution.isPresent());
+        assertEquals(
+                ExecutionStatus.PENDING,
+                savedExecution.get().getStatus()
+        );
     }
 
     private static void insertTask(UUID taskId) {

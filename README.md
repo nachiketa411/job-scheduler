@@ -90,7 +90,7 @@ The repository currently uses Java-focused application code and Gradle Kotlin DS
 distributed-job-scheduler/
 ├── build.gradle.kts
 ├── settings.gradle.kts
-├── docker-compose.yml
+├── docker-compose.yaml
 ├── scheduler-model/
 │   ├── build.gradle.kts
 │   └── src/main/smithy/
@@ -447,7 +447,7 @@ docker compose up -d
 Verify Redis:
 
 ```powershell
-docker exec -it scheduler-redis redis-cli PING
+docker exec -it scheduler-sorted-set-redis redis-cli PING
 ```
 
 Expected:

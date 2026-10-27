@@ -1,10 +1,13 @@
 package com.nachiketa.scheduler.api.repository;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.BatchStatement;
+import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.nachiketa.scheduler.api.mapper.ParameterDocumentMapper;
 import com.nachiketa.scheduler.model.Job;
+import com.nachiketa.scheduler.model.JobExecution;
 import com.nachiketa.scheduler.model.ParameterType;
 import com.nachiketa.scheduler.model.Schedule;
 import com.nachiketa.scheduler.model.ScheduleType;
@@ -36,33 +39,46 @@ public class JobRepositoryImpl implements IJobRepository {
 
     @Override
     public void save(Job job) {
+        session.execute(insertStatement(job));
+    }
+
+    @Override
+    public void saveWithFirstExecution(Job job, JobExecution firstExecution) {
+        session.execute(
+                BatchStatement.newInstance(
+                        BatchType.LOGGED,
+                        insertStatement(job),
+                        JobExecutionRepositoryImpl.insertStatement(firstExecution)
+                )
+        );
+    }
+
+    private SimpleStatement insertStatement(Job job) {
         Map<String, String> parameters =
                 parameterMapper.toStorage(
                         job.getParameters()
                 );
 
-        session.execute(
-                SimpleStatement.newInstance(
-                        """
-                                INSERT INTO jobs (
-                                    job_id,
-                                    name,
-                                    task_id,
-                                    parameters,
-                                    schedule_type,
-                                    schedule_expression,
-                                    created_at
-                                )
-                                VALUES (?, ?, ?, ?, ?, ?, ?)
-                                """,
-                        UUID.fromString(job.getJobId()),
-                        job.getName(),
-                        UUID.fromString(job.getTaskId()),
-                        parameters,
-                        job.getSchedule().getType().getValue(),
-                        job.getSchedule().getExpression(),
-                        job.getCreatedAt()
-                )
+        return SimpleStatement.newInstance(
+                """
+                        INSERT INTO jobs (
+                            job_id,
+                            name,
+                            task_id,
+                            parameters,
+                            schedule_type,
+                            schedule_expression,
+                            created_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                UUID.fromString(job.getJobId()),
+                job.getName(),
+                UUID.fromString(job.getTaskId()),
+                parameters,
+                job.getSchedule().getType().getValue(),
+                job.getSchedule().getExpression(),
+                job.getCreatedAt()
         );
     }
 

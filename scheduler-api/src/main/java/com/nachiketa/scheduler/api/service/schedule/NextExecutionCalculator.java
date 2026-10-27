@@ -2,7 +2,6 @@ package com.nachiketa.scheduler.api.service.schedule;
 
 import com.nachiketa.scheduler.model.Schedule;
 import com.nachiketa.scheduler.model.ScheduleType;
-import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -56,13 +55,8 @@ public class NextExecutionCalculator {
             String expression,
             Instant after) {
 
-        CronExpression cron =
-                CronExpression.parse(
-                        normalizeCron(expression)
-                );
-
-        ZonedDateTime next =
-                cron.next(
+        ZonedDateTime next = CronExpressions.parse(expression)
+                .next(
                         after.atZone(ZoneOffset.UTC)
                 );
 
@@ -74,16 +68,5 @@ public class NextExecutionCalculator {
         }
 
         return next.toInstant();
-    }
-
-    private String normalizeCron(String expression) {
-        String trimmed = expression.trim();
-        int fields = trimmed.split("\\s+").length;
-
-        if (fields == 5) {
-            return "0 " + trimmed;
-        }
-
-        return trimmed;
     }
 }
