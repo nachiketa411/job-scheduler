@@ -1,18 +1,11 @@
 package com.nachiketa.scheduler.api.service.validation;
 
+import com.nachiketa.scheduler.api.exception.InvalidRequestException;
 import com.nachiketa.scheduler.model.ParameterType;
 import org.springframework.stereotype.Component;
 import software.amazon.smithy.java.core.serde.document.Document;
 
 import java.util.Map;
-
-import static com.nachiketa.scheduler.model.ParameterType.BOOLEAN;
-import static com.nachiketa.scheduler.model.ParameterType.DOUBLE;
-import static com.nachiketa.scheduler.model.ParameterType.FLOAT;
-import static com.nachiketa.scheduler.model.ParameterType.INTEGER;
-import static com.nachiketa.scheduler.model.ParameterType.LONG;
-import static com.nachiketa.scheduler.model.ParameterType.STRING;
-import static com.nachiketa.scheduler.model.ParameterType.TIMESTAMP;
 
 @Component
 public class ParameterValidator {
@@ -43,7 +36,7 @@ public class ParameterValidator {
             Map<String, Document> supplied) {
 
         if (!supplied.keySet().equals(schema.keySet())) {
-            throw new IllegalArgumentException(
+            throw new InvalidRequestException(
                     "Supplied parameters do not match task parameter schema"
             );
         }
@@ -112,7 +105,7 @@ public class ParameterValidator {
         try {
             conversion.run();
         } catch (RuntimeException exception) {
-            throw new IllegalArgumentException(
+            throw new InvalidRequestException(
                     "Parameter '%s' must be of type %s"
                             .formatted(
                                     name,

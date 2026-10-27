@@ -13,23 +13,42 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleSmithyConverterException(
             SmithyConverterException exception
     ) {
-        ErrorResponse response = new ErrorResponse(
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                "Internal Server Error",
+        return error(
+                HttpStatus.INTERNAL_SERVER_ERROR,
                 "Unable to process the request"
         );
-
-        return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(response);
     }
 
     @ExceptionHandler(JobNotFoundException.class)
-    public  ResponseEntity<JobNotFoundException> handleJobNotFound(
+    public ResponseEntity<ErrorResponse> handleJobNotFound(
             JobNotFoundException exception
     ) {
+        return error(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage()
+        );
+    }
+
+    @ExceptionHandler(InvalidRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(
+            InvalidRequestException exception
+    ) {
+        return error(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+    }
+
+    private ResponseEntity<ErrorResponse> error(
+            HttpStatus status,
+            String message
+    ) {
         return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(exception);
+                .status(status)
+                .body(new ErrorResponse(
+                        status.value(),
+                        status.getReasonPhrase(),
+                        message
+                ));
     }
 }

@@ -1,6 +1,6 @@
 package com.nachiketa.scheduler.api.service;
 
-import com.nachiketa.scheduler.api.repository.IJobExecutionRepository;
+import com.nachiketa.scheduler.api.exception.InvalidRequestException;
 import com.nachiketa.scheduler.api.repository.IJobRepository;
 import com.nachiketa.scheduler.api.repository.ITaskRepository;
 import com.nachiketa.scheduler.api.service.schedule.NextExecutionCalculator;
@@ -51,9 +51,6 @@ public class JobServiceImplTest {
     private ITaskRepository taskRepository;
 
     @Mock
-    private IJobExecutionRepository jobExecutionRepository;
-
-    @Mock
     private ParameterValidator parameterValidator;
 
     @Mock
@@ -69,7 +66,6 @@ public class JobServiceImplTest {
         jobService = new JobServiceImpl(
                 taskRepository,
                 jobRepository,
-                jobExecutionRepository,
                 parameterValidator,
                 scheduleValidator,
                 nextExecutionCalculator
@@ -177,10 +173,10 @@ public class JobServiceImplTest {
                 .validate(schedule);
 
         verify(jobRepository)
-                .save(any(Job.class));
-
-        verify(jobExecutionRepository)
-                .save(any(JobExecution.class));
+                .saveWithFirstExecution(
+                        any(Job.class),
+                        any(JobExecution.class)
+                );
     }
 
     /**
@@ -218,7 +214,10 @@ public class JobServiceImplTest {
                 ArgumentCaptor.forClass(Job.class);
 
         verify(jobRepository)
-                .save(jobCaptor.capture());
+                .saveWithFirstExecution(
+                        jobCaptor.capture(),
+                        any(JobExecution.class)
+                );
 
         Job savedJob = jobCaptor.getValue();
 
@@ -286,8 +285,11 @@ public class JobServiceImplTest {
         ArgumentCaptor<JobExecution> executionCaptor =
                 ArgumentCaptor.forClass(JobExecution.class);
 
-        verify(jobExecutionRepository)
-                .save(executionCaptor.capture());
+        verify(jobRepository)
+                .saveWithFirstExecution(
+                        any(Job.class),
+                        executionCaptor.capture()
+                );
 
         JobExecution execution =
                 executionCaptor.getValue();
@@ -319,7 +321,7 @@ public class JobServiceImplTest {
      * occurs after the task lookup fails.
      */
     @Test
-    void createJob_whenTaskDoesNotExist_throwsIllegalArgumentException() {
+    void createJob_whenTaskDoesNotExist_throwsInvalidRequestException() {
         UUID taskId = UUID.randomUUID();
 
         CreateJobInput input = mock(CreateJobInput.class);
@@ -330,9 +332,9 @@ public class JobServiceImplTest {
         when(taskRepository.findParameterSchema(taskId))
                 .thenReturn(Optional.empty());
 
-        IllegalArgumentException exception =
+        InvalidRequestException exception =
                 assertThrows(
-                        IllegalArgumentException.class,
+                        InvalidRequestException.class,
                         () -> jobService.createJob(input)
                 );
 
@@ -348,8 +350,7 @@ public class JobServiceImplTest {
                 parameterValidator,
                 scheduleValidator,
                 nextExecutionCalculator,
-                jobRepository,
-                jobExecutionRepository
+                jobRepository
         );
     }
 
@@ -399,8 +400,7 @@ public class JobServiceImplTest {
         verifyNoInteractions(
                 scheduleValidator,
                 nextExecutionCalculator,
-                jobRepository,
-                jobExecutionRepository
+                jobRepository
         );
     }
 
@@ -451,8 +451,55 @@ public class JobServiceImplTest {
 
         verifyNoInteractions(
                 nextExecutionCalculator,
-                jobRepository,
-                jobExecutionRepository
+                jobRepository
         );
+    }
+
+    /**
+     * Verifies that a malformed taskId is rejected as an invalid request
+     * before any repository or validation work occurs.
+     */
+    @Test
+    void createJob_whenTaskIdIsNotUuid_throwsInvalidRequestException() {
+        CreateJobInput input = mock(CreateJobInput.class);
+
+        when(input.getTaskId())
+                .thenReturn("not-a-uuid");
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> jobService.createJob(input)
+        );
+
+        assertEquals(
+                "taskId must be a valid UUID: not-a-uuid",
+                exception.getMessage()
+        );
+
+        verifyNoInteractions(
+                taskRepository,
+                parameterValidator,
+                scheduleValidator,
+                nextExecutionCalculator,
+                jobRepository
+        );
+    }
+
+    /**
+     * Verifies that a malformed jobId is rejected as an invalid request
+     * without querying the repository.
+     */
+    @Test
+    void getJob_whenJobIdIsNotUuid_throwsInvalidRequestException() {
+        GetJobInput input = GetJobInput.builder()
+                .jobId("not-a-uuid")
+                .build();
+
+        assertThrows(
+                InvalidRequestException.class,
+                () -> jobService.getJob(input)
+        );
+
+        verifyNoInteractions(jobRepository);
     }
 }

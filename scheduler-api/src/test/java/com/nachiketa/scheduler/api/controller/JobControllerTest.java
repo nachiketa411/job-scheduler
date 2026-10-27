@@ -1,5 +1,6 @@
 package com.nachiketa.scheduler.api.controller;
 
+import com.nachiketa.scheduler.api.exception.InvalidRequestException;
 import com.nachiketa.scheduler.api.service.IJobService;
 import com.nachiketa.scheduler.model.CreateJobInput;
 import com.nachiketa.scheduler.model.GetJobInput;
@@ -22,6 +23,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(JobController.class)
@@ -108,7 +110,31 @@ public class JobControllerTest {
         mockMvc.perform(
                         get("/jobs/{jobId}", jobId)
                 )
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Job not found: " + jobId));
+    }
+
+    /**
+     * Verifies that an InvalidRequestException from the service layer
+     * is translated into an HTTP 400 ErrorResponse.
+     */
+    @Test
+    void getJob_whenRequestIsInvalid_returns400() throws Exception {
+        when(jobService.getJob(any(GetJobInput.class)))
+                .thenThrow(
+                        new InvalidRequestException(
+                                "jobId must be a valid UUID: abc"
+                        )
+                );
+
+        mockMvc.perform(
+                        get("/jobs/{jobId}", "abc")
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("jobId must be a valid UUID: abc"));
     }
 
     /**

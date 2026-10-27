@@ -238,4 +238,22 @@ public class NextExecutionCalculatorTest {
                 )
         );
     }
+
+    @Test
+    void calculateNextExecution_whenCronHasSevenFields_throwsIllegalArgumentException() {
+        Schedule schedule = Schedule.builder()
+                .type(ScheduleType.CRON)
+                .expression("0 30 15 * * 5 2026")
+                .build();
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> nextExecutionCalculator.calculateNextExecution(schedule, Instant.now())
+        );
+
+        assertEquals(
+                "CRON expression must contain 5 or 6 fields",
+                exception.getMessage()
+        );
+    }
 }
