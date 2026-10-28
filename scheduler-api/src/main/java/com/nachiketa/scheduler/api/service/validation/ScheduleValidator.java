@@ -4,7 +4,6 @@ import com.nachiketa.scheduler.api.exception.InvalidRequestException;
 import com.nachiketa.scheduler.api.service.schedule.CronExpressions;
 import com.nachiketa.scheduler.model.Schedule;
 import com.nachiketa.scheduler.model.ScheduleType;
-import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -26,7 +25,7 @@ public class ScheduleValidator {
             return;
         }
 
-        throw new IllegalArgumentException(
+        throw new InvalidRequestException(
                 "Unsupported schedule type: " + type.getValue()
         );
     }
@@ -45,7 +44,7 @@ public class ScheduleValidator {
         Instant executionTime = Instant.ofEpochSecond(epochSeconds);
 
         if (!executionTime.isAfter(Instant.now())) {
-            throw new IllegalArgumentException(
+            throw new InvalidRequestException(
                     "ONE_TIME execution must be in the future"
             );
         }
